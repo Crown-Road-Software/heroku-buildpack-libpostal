@@ -28,8 +28,9 @@ else
   # Clean up any partial clone from a previous failed build
   rm -rf libpostal-src
 
-  echo "-----> Cloning libpostal"
-  git clone --depth 1 https://github.com/openvenues/libpostal libpostal-src
+  LIBPOSTAL_VERSION="${LIBPOSTAL_VERSION:-v1.1.4}"
+  echo "-----> Cloning libpostal (${LIBPOSTAL_VERSION})"
+  git clone --depth 1 --branch "${LIBPOSTAL_VERSION}" https://github.com/openvenues/libpostal libpostal-src
   cd libpostal-src/
 
   echo "-----> Configuring libpostal"
