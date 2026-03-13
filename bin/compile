@@ -6,33 +6,72 @@ indent() {
   sed -u 's/^/       /'
 }
 
-
 build=${1:-}
 cache=${2:-}
 
 mkdir -p "${build}"
 mkdir -p "${cache}"
 
-cd "${cache}"
+LIBPOSTAL_CACHE="${cache}/libpostal"
+LIBPOSTAL_BUILD="${build}/libpostal"
 
-echo "-----> Downloading libpostal"
-git clone https://github.com/openvenues/libpostal
-cd libpostal/
-./bootstrap.sh
-export LDFLAGS="-L${build}/libpostal/lib" 
-export CFLAGS="-I${build}/libpostal/include" 
-export PKG_CONFIG_PATH="${build}/libpostal/lib/pkgconfig"
-./configure  --enable-fast-install --prefix=/app/libpostal --datadir=/app/libpostal/data
+# Check if libpostal is already compiled and cached
+if [ -d "${LIBPOSTAL_CACHE}/lib" ] && [ -d "${LIBPOSTAL_CACHE}/data" ]; then
+  echo "-----> Using cached libpostal" | indent
+  mkdir -p "${LIBPOSTAL_BUILD}"
+  cp -a "${LIBPOSTAL_CACHE}/." "${LIBPOSTAL_BUILD}/"
+else
+  echo "-----> Building libpostal from source (first build, this will take a while)"
 
-echo "-----> libpostal make"
-make
-make install
+  cd "${cache}"
 
-echo "-----> libpostal mv to ${build}/libpostal"
-mkdir -p "${build}/libpostal"
-mv /app/libpostal $build
+  # Clean up any partial clone from a previous failed build
+  rm -rf libpostal-src
 
-echo "exporting PATH and LIBRARY_PATH" | indent
+  echo "-----> Cloning libpostal"
+  git clone --depth 1 https://github.com/openvenues/libpostal libpostal-src
+  cd libpostal-src/
+
+  echo "-----> Configuring libpostal"
+  ./bootstrap.sh
+  export LDFLAGS="-L${build}/libpostal/lib"
+  export CFLAGS="-I${build}/libpostal/include"
+  export PKG_CONFIG_PATH="${build}/libpostal/lib/pkgconfig"
+  ./configure --enable-fast-install --prefix=/app/libpostal --datadir=/app/libpostal/data
+
+  echo "-----> Compiling libpostal"
+  make
+  make install
+
+  echo "-----> Moving libpostal to build directory"
+  mkdir -p "${LIBPOSTAL_BUILD}"
+  mv /app/libpostal/* "${LIBPOSTAL_BUILD}/"
+
+  # Cache the compiled result for future builds
+  echo "-----> Caching libpostal for future builds"
+  rm -rf "${LIBPOSTAL_CACHE}"
+  cp -a "${LIBPOSTAL_BUILD}" "${LIBPOSTAL_CACHE}"
+
+  # Clean up source
+  rm -rf "${cache}/libpostal-src"
+fi
+
+echo "-----> Setting up libpostal environment" | indent
 PROFILE_PATH="$build/.profile.d/libpostal.sh"
-mkdir -p $(dirname $PROFILE_PATH)
-echo 'export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:app/libpostal/lib"' >> $PROFILE_PATH
+mkdir -p "$(dirname "$PROFILE_PATH")"
+cat > "$PROFILE_PATH" <<'EOF'
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}/app/libpostal/lib"
+export LIBRARY_PATH="${LIBRARY_PATH:+$LIBRARY_PATH:}/app/libpostal/lib"
+export C_INCLUDE_PATH="${C_INCLUDE_PATH:+$C_INCLUDE_PATH:}/app/libpostal/include"
+export CPLUS_INCLUDE_PATH="${CPLUS_INCLUDE_PATH:+$CPLUS_INCLUDE_PATH:}/app/libpostal/include"
+export PKG_CONFIG_PATH="${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}/app/libpostal/lib/pkgconfig"
+EOF
+
+# Also export for the current build phase (so subsequent buildpacks can find libpostal)
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}${LIBPOSTAL_BUILD}/lib"
+export LIBRARY_PATH="${LIBRARY_PATH:+$LIBRARY_PATH:}${LIBPOSTAL_BUILD}/lib"
+export C_INCLUDE_PATH="${C_INCLUDE_PATH:+$C_INCLUDE_PATH:}${LIBPOSTAL_BUILD}/include"
+export CPLUS_INCLUDE_PATH="${CPLUS_INCLUDE_PATH:+$CPLUS_INCLUDE_PATH:}${LIBPOSTAL_BUILD}/include"
+export PKG_CONFIG_PATH="${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}${LIBPOSTAL_BUILD}/lib/pkgconfig"
+
+echo "-----> libpostal installed successfully" | indent
