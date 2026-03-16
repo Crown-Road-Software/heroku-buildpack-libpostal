@@ -28,8 +28,9 @@ else
   # Clean up any partial clone from a previous failed build
   rm -rf libpostal-src
 
-  echo "-----> Cloning libpostal"
-  git clone --depth 1 https://github.com/openvenues/libpostal libpostal-src
+  LIBPOSTAL_VERSION="${LIBPOSTAL_VERSION:-v1.1.4}"
+  echo "-----> Cloning libpostal (${LIBPOSTAL_VERSION})"
+  git clone --depth 1 --branch "${LIBPOSTAL_VERSION}" https://github.com/openvenues/libpostal libpostal-src
   cd libpostal-src/
 
   echo "-----> Configuring libpostal"
@@ -67,11 +68,14 @@ export CPLUS_INCLUDE_PATH="${CPLUS_INCLUDE_PATH:+$CPLUS_INCLUDE_PATH:}/app/libpo
 export PKG_CONFIG_PATH="${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}/app/libpostal/lib/pkgconfig"
 EOF
 
-# Also export for the current build phase (so subsequent buildpacks can find libpostal)
-export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}${LIBPOSTAL_BUILD}/lib"
-export LIBRARY_PATH="${LIBRARY_PATH:+$LIBRARY_PATH:}${LIBPOSTAL_BUILD}/lib"
-export C_INCLUDE_PATH="${C_INCLUDE_PATH:+$C_INCLUDE_PATH:}${LIBPOSTAL_BUILD}/include"
-export CPLUS_INCLUDE_PATH="${CPLUS_INCLUDE_PATH:+$CPLUS_INCLUDE_PATH:}${LIBPOSTAL_BUILD}/include"
-export PKG_CONFIG_PATH="${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}${LIBPOSTAL_BUILD}/lib/pkgconfig"
+# Export for subsequent buildpacks (Heroku sources this file before the next buildpack)
+BP_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cat > "$BP_DIR/export" <<EXPORT
+export LD_LIBRARY_PATH="\${LD_LIBRARY_PATH:+\$LD_LIBRARY_PATH:}${LIBPOSTAL_BUILD}/lib"
+export LIBRARY_PATH="\${LIBRARY_PATH:+\$LIBRARY_PATH:}${LIBPOSTAL_BUILD}/lib"
+export C_INCLUDE_PATH="\${C_INCLUDE_PATH:+\$C_INCLUDE_PATH:}${LIBPOSTAL_BUILD}/include"
+export CPLUS_INCLUDE_PATH="\${CPLUS_INCLUDE_PATH:+\$CPLUS_INCLUDE_PATH:}${LIBPOSTAL_BUILD}/include"
+export PKG_CONFIG_PATH="\${PKG_CONFIG_PATH:+\$PKG_CONFIG_PATH:}${LIBPOSTAL_BUILD}/lib/pkgconfig"
+EXPORT
 
 echo "-----> libpostal installed successfully" | indent
